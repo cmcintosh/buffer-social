@@ -1,8 +1,8 @@
 # Buffer Social Media Scheduler Skill
 
-Cross-platform social media posting via Buffer API. Manage Twitter/X, LinkedIn, Facebook, and Instagram from one interface.
+Cross-platform social media posting via Buffer GraphQL API v2. Manage Twitter/X, LinkedIn, Facebook, and Instagram from one interface.
 
-> **Note:** This skill was built for **Wembassy** social media management. Uses Buffer's free tier (10 scheduled post limit).
+> **Note:** This skill was built for **Wembassy** social media management using Buffer's GraphQL API (`api.buffer.com/graphql`). Uses Buffer's free tier (10 scheduled post limit).
 
 ## Setup
 
