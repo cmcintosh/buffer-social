@@ -407,7 +407,7 @@ class BufferClient:
     def schedule_post(
         self,
         text: str,
-        due_at: str,
+        due_at: Union[str, datetime],
         service: Optional[str] = None
     ) -> Dict:
         """
@@ -415,7 +415,7 @@ class BufferClient:
         
         Args:
             text: Post content
-            due_at: ISO8601 datetime string
+            due_at: ISO8601 datetime string or datetime object
             service: Service name (twitter, facebook, etc.)
         """
         org_id = self.get_default_organization_id()
@@ -427,6 +427,14 @@ class BufferClient:
         
         if not channel_id:
             raise ValueError("No active channels found")
+        
+        # Format due_at properly for Buffer API
+        if isinstance(due_at, datetime):
+            # Ensure timezone aware and format correctly
+            if due_at.tzinfo is None:
+                from datetime import timezone
+                due_at = due_at.replace(tzinfo=timezone.utc)
+            due_at = due_at.strftime('%Y-%m-%dT%H:%M:%SZ')
         
         return self.create_post(channel_id, text, mode="customScheduled", due_at=due_at)
     
