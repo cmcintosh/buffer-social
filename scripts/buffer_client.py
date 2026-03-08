@@ -171,10 +171,8 @@ class BufferClient:
         elif isinstance(profile_ids, str):
             profile_ids = [profile_ids]
         elif isinstance(profile_ids, list):
-            
-
-        # Extract IDs from profile dicts
-        profile_ids = [p.get('id') if isinstance(p, dict) else p for p in profile_ids]
+            # Extract IDs from profile dicts
+            profile_ids = [p.get('id') if isinstance(p, dict) else p for p in profile_ids]
 
         payload = {
             'text': text,

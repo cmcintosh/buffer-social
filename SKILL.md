@@ -204,12 +204,21 @@ buffer_client.create_update(text=text_twitter, profile_ids=[twitter_id])
 
 ## Troubleshooting
 
+**400 "Unsupported Content-Type"**:
+- API endpoint changed - try `api.buffer.com/4/` or `publish.buffer.com/1/`
+- Token format may have changed - regenerate at buffer.com/developers
+
 **401 Unauthorized**:
 - Access token expired - regenerate at buffer.com/developers
+- Token may be for different API version
 
 **403 Forbidden**:
 - Free tier limit reached (10 scheduled posts)
 - Connected account limit reached (3 accounts)
+
+**500 Server Error**:
+- Buffer API may be temporarily down
+- Try again in a few minutes
 
 **Profile not found**:
 - Check profile ID with `list_profiles()`
