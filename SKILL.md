@@ -4,6 +4,33 @@ Cross-platform social media posting via Buffer GraphQL API v2.
 
 > **Note:** This skill was built for **Wembassy** social media management using Buffer's GraphQL API (`api.buffer.com/graphql`). Uses Buffer's free tier (10 scheduled post limit).
 
+## Quick Start Flow
+
+**3-Step Flow:** Org → Channel → Post
+
+```python
+from buffer_client import BufferClient
+
+client = BufferClient()
+
+# Step 1: Get Organization
+org_id = client.get_default_organization_id()
+print(f"Org: {org_id}")
+
+# Step 2: Get Channels (connected accounts)
+channels = client.get_channels(org_id)
+for ch in channels:
+    print(f"  {ch['service']}: {ch['name']}")
+
+# Step 3: Post to a channel
+post = client.add_to_queue(
+    text="Hello world! 🚀",
+    service="twitter"  # or "facebook", "googlebusiness"
+)
+post_id = post['id']
+print(f"Posted: {post_id}")
+```
+
 ## Setup
 
 ### 1. Create Buffer Account
@@ -73,6 +100,14 @@ client.schedule_post(
     text="Tomorrow's post",
     due_at=due_at,
     service="twitter"
+)
+
+# Post with image
+client.create_image_post(
+    channel_id=channel_id,
+    text="Check out this image! 🖼️",
+    image_url="https://example.com/image.jpg",
+    mode="addToQueue"
 )
 ```
 

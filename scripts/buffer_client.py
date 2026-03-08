@@ -374,9 +374,49 @@ class BufferClient:
         return self._graphql(query, {'input': {'id': post_id}})
     
     # ========================================================================
+    # IMAGE POSTING
+    # ========================================================================
+
+    def create_image_post(
+        self,
+        channel_id: str,
+        text: str,
+        image_url: str,
+        mode: str = "addToQueue",
+        scheduling_type: str = "automatic",
+        due_at: Optional[str] = None
+    ) -> Dict:
+        """
+        Create a post with an image
+
+        Args:
+            channel_id: Channel ID to post to
+            text: Post content
+            image_url: URL to image (Buffer fetches from this URL)
+            mode: "addToQueue", "shareNow", "customScheduled"
+            scheduling_type: "automatic" or "notification"
+            due_at: ISO8601 datetime string for custom scheduling
+
+        Returns:
+            Created post object
+        """
+        assets = [{
+            'url': image_url,
+            'mimeType': 'image/jpeg'  # Adjust if needed
+        }]
+        return self.create_post(
+            channel_id=channel_id,
+            text=text,
+            mode=mode,
+            scheduling_type=scheduling_type,
+            due_at=due_at,
+            assets=assets
+        )
+
+    # ========================================================================
     # SIMPLIFIED HELPERS
     # ========================================================================
-    
+
     def get_default_organization_id(self) -> str:
         """Get the first organization ID (convenience method)"""
         orgs = self.get_organizations()
