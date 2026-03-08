@@ -175,6 +175,17 @@ python scripts/buffer_client.py posts --limit 5
 - Auth: Bearer token
 - Docs: https://developers.buffer.com/reference.html
 
+## Important Notes
+
+### Deletion
+**Buffer GraphQL API does NOT support deleting posts.** You must delete manually from the Buffer dashboard:
+1. Go to https://buffer.com
+2. Navigate to the account's queue
+3. Click the X/Delete on posts
+
+### Test Posts
+Be careful when testing - posts go live immediately with `shareNow`! Always clean up test posts from the Buffer dashboard.
+
 ## License
 
 Internal use for Wembassy operations.
