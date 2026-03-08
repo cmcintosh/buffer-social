@@ -215,61 +215,70 @@ class BufferClient:
     
     def create_post(
         self,
-        channel_ids: List[str],
+        channel_id: str,
         text: str,
-        scheduled_at: Optional[str] = None,
-        media: Optional[List[Dict]] = None
+        scheduling_type: str = "automatic",
+        mode: str = "addToQueue",
+        due_at: Optional[str] = None,
+        assets: Optional[List[Dict]] = None,
+        metadata: Optional[Dict] = None
     ) -> Dict:
         """
         Create a new post
         
         Args:
-            channel_ids: List of channel IDs to post to
+            channel_id: Channel ID to post to (single channel)
             text: Post content
-            scheduled_at: ISO8601 datetime string (optional, post immediately if not set)
-            media: List of media objects [{'url': '...', 'type': 'image'}]
+            scheduling_type: "automatic" or "notification"
+            mode: "addToQueue", "shareNow", "shareNext", "customScheduled", "recommendedTime"
+            due_at: ISO8601 datetime string for custom scheduling (mode=customScheduled)
+            assets: List of media assets
+            metadata: Additional post metadata
             
         Returns:
             Created post object
         """
-        variables = {
-            'input': {
-                'channelIds': channel_ids,
-                'content': {
-                    'text': text
-                }
-            }
+        input_data = {
+            'channelId': channel_id,
+            'schedulingType': scheduling_type,
+            'mode': mode,
+            'text': text
         }
         
-        if scheduled_at:
-            variables['input']['scheduledAt'] = scheduled_at
+        if due_at and mode == "customScheduled":
+            input_data['dueAt'] = due_at
         
-        if media:
-            variables['input']['media'] = media
+        if assets:
+            input_data['assets'] = assets
+        
+        if metadata:
+            input_data['metadata'] = metadata
         
         query = """
         mutation CreatePost($input: CreatePostInput!) {
           createPost(input: $input) {
-            id
-            content {
-              text
-            }
-            status
-            scheduledAt
-            channel {
-              id
-              name
-              service
+            ... on PostActionSuccess {
+              post {
+                id
+                text
+                status
+                channel {
+                  id
+                  name
+                  service
+                }
+              }
             }
           }
         }
         """
         
-        result = self._graphql(query, variables)
+        result = self._graphql(query, {'input': input_data})
         return result.get('createPost', {})
     
     def get_posts(
         self,
+        organization_id: str,
         limit: int = 10,
         cursor: Optional[str] = None
     ) -> Dict:
@@ -277,6 +286,7 @@ class BufferClient:
         Get posts for the organization
         
         Args:
+            organization_id: Organization ID
             limit: Number of posts to return
             cursor: Cursor for pagination
             
@@ -285,7 +295,7 @@ class BufferClient:
         """
         variables = {
             'input': {
-                'first': limit
+                'organizationId': organization_id
             }
         }
         
@@ -298,12 +308,12 @@ class BufferClient:
             edges {
               node {
                 id
-                content {
-                  text
-                }
+                text
                 status
-                scheduledAt
-                publishedAt
+                dueAt
+                sentAt
+                createdAt
+                updatedAt
                 channel {
                   id
                   name
@@ -329,12 +339,12 @@ class BufferClient:
         query GetPost($input: PostInput!) {
           post(input: $input) {
             id
-            content {
-              text
-            }
+            text
             status
-            scheduledAt
-            publishedAt
+            dueAt
+            sentAt
+            createdAt
+            updatedAt
             channel {
               id
               name
@@ -348,78 +358,97 @@ class BufferClient:
     
     def delete_post(self, post_id: str) -> Dict:
         """Delete/unschedule a post"""
-        # Note: Buffer GraphQL API may not have direct delete
-        # This would map to cancelling or similar action
+        # The mutation might be different - let's try
         query = """
         mutation DeletePost($input: DeletePostInput!) {
           deletePost(input: $input) {
-            success
+            ... on PostActionSuccess {
+              success
+              post {
+                id
+              }
+            }
           }
         }
         """
-        # If delete mutation doesn't exist, this will fail and need adjustment
-        try:
-            result = self._graphql(query, {'input': {'id': post_id}})
-            return result.get('deletePost', {'success': True})
-        except BufferAPIException as e:
-            # Delete may not be supported directly
-            return {'success': False, 'error': str(e)}
+        return self._graphql(query, {'input': {'id': post_id}})
     
     # ========================================================================
     # SIMPLIFIED HELPERS
     # ========================================================================
     
-    def post_now(self, text: str, services: Optional[List[str]] = None) -> Dict:
+    def get_default_organization_id(self) -> str:
+        """Get the first organization ID (convenience method)"""
+        orgs = self.get_organizations()
+        if not orgs:
+            raise ValueError("No organizations found")
+        return orgs[0]['id']
+    
+    def post_now(self, text: str, service: Optional[str] = None) -> Dict:
         """
-        Post immediately to specified services (or all)
+        Post immediately to specified service
         
         Args:
             text: Post content
-            services: List of service names (or None for all)
+            service: Service name (twitter, facebook, etc.) or None for first available
         """
-        if services:
-            channel_ids = []
-            for svc in services:
-                ch = self.get_first_channel_id(svc)
-                if ch:
-                    channel_ids.append(ch)
-        else:
-            channels = self.get_channels()
-            channel_ids = [c['id'] for c in channels if c.get('isActive')]
+        org_id = self.get_default_organization_id()
         
-        if not channel_ids:
+        if service:
+            channel_id = self.get_first_channel_id(org_id, service)
+        else:
+            channel_id = self.get_first_channel_id(org_id)
+        
+        if not channel_id:
             raise ValueError("No active channels found")
         
-        return self.create_post(channel_ids, text)
+        return self.create_post(channel_id, text, mode="shareNow")
     
     def schedule_post(
         self,
         text: str,
-        scheduled_at: str,
-        services: Optional[List[str]] = None
+        due_at: str,
+        service: Optional[str] = None
     ) -> Dict:
         """
-        Schedule a post for later
+        Schedule a post for a specific time
         
         Args:
             text: Post content
-            scheduled_at: ISO8601 datetime string
-            services: List of service names (or None for all)
+            due_at: ISO8601 datetime string
+            service: Service name (twitter, facebook, etc.)
         """
-        if services:
-            channel_ids = []
-            for svc in services:
-                ch = self.get_first_channel_id(svc)
-                if ch:
-                    channel_ids.append(ch)
-        else:
-            channels = self.get_channels()
-            channel_ids = [c['id'] for c in channels if c.get('isActive')]
+        org_id = self.get_default_organization_id()
         
-        if not channel_ids:
+        if service:
+            channel_id = self.get_first_channel_id(org_id, service)
+        else:
+            channel_id = self.get_first_channel_id(org_id)
+        
+        if not channel_id:
             raise ValueError("No active channels found")
         
-        return self.create_post(channel_ids, text, scheduled_at=scheduled_at)
+        return self.create_post(channel_id, text, mode="customScheduled", due_at=due_at)
+    
+    def add_to_queue(self, text: str, service: Optional[str] = None) -> Dict:
+        """
+        Add post to queue (end of queue)
+        
+        Args:
+            text: Post content
+            service: Service name
+        """
+        org_id = self.get_default_organization_id()
+        
+        if service:
+            channel_id = self.get_first_channel_id(org_id, service)
+        else:
+            channel_id = self.get_first_channel_id(org_id)
+        
+        if not channel_id:
+            raise ValueError("No active channels found")
+        
+        return self.create_post(channel_id, text, mode="addToQueue")
 
 
 class BufferAPIException(Exception):
@@ -468,25 +497,30 @@ def cli_main():
             print(json.dumps(account, indent=2))
         
         elif args.command == 'channels':
-            channels = client.get_channels()
+            org_id = client.get_default_organization_id()
+            channels = client.get_channels(org_id)
             print(f"Connected channels: {len(channels)}")
             for ch in channels:
-                active = '✓' if ch.get('isActive') else '✗'
-                print(f"  {active} {ch['service']}: {ch['name']} ({ch['id'][:8]}...)")
+                print(f"  ✓ {ch['service']}: {ch['name']} ({ch['id'][:8]}...)")
         
         elif args.command == 'post':
-            services = args.services.split(',') if args.services else None
-            
             if args.schedule and args.schedule != 'now':
-                result = client.schedule_post(args.text, args.schedule, services)
+                service = args.services.split(',')[0] if args.services else None
+                result = client.schedule_post(args.text, args.schedule, service)
             else:
-                result = client.post_now(args.text, services)
+                service = args.services.split(',')[0] if args.services else None
+                result = client.post_now(args.text, service)
             
             print(json.dumps(result, indent=2))
         
         elif args.command == 'posts':
-            posts = client.get_posts(limit=args.limit)
-            print(json.dumps(posts, indent=2))
+            org_id = client.get_default_organization_id()
+            posts = client.get_posts(org_id, limit=args.limit)
+            edges = posts.get('edges', [])
+            print(f"Found {len(edges)} posts:")
+            for edge in edges:
+                node = edge.get('node', {})
+                print(f"  [{node.get('status')}] {node.get('text', '')[:50]}...")
         
     except BufferAPIException as e:
         print(f"Error: {e}", file=sys.stderr)

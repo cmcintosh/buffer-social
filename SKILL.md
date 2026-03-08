@@ -1,6 +1,6 @@
 # Buffer Social Media Scheduler Skill
 
-Cross-platform social media posting via Buffer GraphQL API v2. Manage Twitter/X, LinkedIn, Facebook, and Instagram from one interface.
+Cross-platform social media posting via Buffer GraphQL API v2.
 
 > **Note:** This skill was built for **Wembassy** social media management using Buffer's GraphQL API (`api.buffer.com/graphql`). Uses Buffer's free tier (10 scheduled post limit).
 
@@ -8,58 +8,32 @@ Cross-platform social media posting via Buffer GraphQL API v2. Manage Twitter/X,
 
 ### 1. Create Buffer Account
 - Sign up at https://buffer.com
-- Connect social accounts (Twitter/X, LinkedIn, Facebook, Instagram)
-- Upgrade not required for free tier
+- Connect social accounts (Twitter/X, LinkedIn, Facebook, Google Business)
 
 ### 2. Get API Access Token
 - Go to https://buffer.com/developers
-- Create a new app
-- Get your **Access Token**
+- Create an app → Get Access Token
 
 ### 3. Configure Skill
 ```bash
 cp .env.example .env
-# Edit .env with your credentials
+# Edit .env with your token
 ```
 
 ## Configuration
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `BUFFER_ACCESS_TOKEN` | Buffer API access token | ✅ |
-| `BUFFER_DEFAULT_PROFILES` | Default profile IDs (comma-separated) | Optional |
+| Variable | Description |
+|----------|-------------|
+| `BUFFER_ACCESS_TOKEN` | Buffer API access token |
 
-## Buffer Free Tier Limits
+## Limits
 
-| Limit | Value |
-|-------|-------|
-| Scheduled posts | **10 maximum** |
+| Resource | Free Tier |
+|----------|-----------|
+| Scheduled posts | 10 maximum |
 | Social accounts | 3 |
-| Profiles per post | 1-4 |
-| Image attachments | ✅ Supported |
-| Video attachments | ❌ Not on free tier |
 
-## API Methods
-
-### Profiles (Connected Accounts)
-- `list_profiles()` - Get all connected social accounts
-- `get_profile(profile_id)` - Get specific profile details
-
-### Updates (Posts)
-- `list_pending()` - Get scheduled posts (up to 10)
-- `list_sent()` - Get posted history
-- `create_update(text, profile_ids, ...)` - Schedule new post
-- `get_update(update_id)` - Get post details
-- `update_update(update_id, text, ...)` - Edit scheduled post
-- `delete_update(update_id)` - Remove from queue
-- `shuffle_updates(profile_id)` - Randomize queue order
-
-### Queue Management
-- `get_queue_count(profile_id=None)` - Count scheduled posts
-- `has_queue_space(profile_id=None)` - Check if queue has room
-- `get_next_send_time(profile_ids)` - When will next post go out
-
-## Usage Examples
+## Usage
 
 ### Initialize Client
 ```python
@@ -68,173 +42,133 @@ from buffer_client import BufferClient
 client = BufferClient()
 ```
 
-### List Connected Accounts
+### List Connected Channels
 ```python
-profiles = client.list_profiles()
-for profile in profiles:
-    print(f"{profile['service']}: {profile['formatted_username']}")
-    # twitter: @wembassy
-    # linkedin: Wembassy
+org_id = client.get_default_organization_id()
+channels = client.get_channels(org_id)
+
+for ch in channels:
+    print(f"{ch['service']}: {ch['name']}")
 ```
 
 ### Schedule a Post
 ```python
-# Post to all profiles
-update = client.create_update(
-    text="Check out our latest blog post! 🚀 https://wembassy.com/blog",
-    profile_ids=profiles  # Post to all connected accounts
+# Add to queue (posts at next available slot)
+client.add_to_queue(
+    text="Hello from Wembassy! 🚀",
+    service="twitter"  # or "facebook" etc.
 )
-print(f"Scheduled: {update['id']}")
-print(f"Will post at: {update['due_at']}")
-```
 
-### Schedule with Image
-```python
-update = client.create_update(
-    text="New automation service launch!",
-    profile_ids=[twitter_id, linkedin_id],  # Specific platforms only
-    photo_url="https://wembassy.com/images/launch.png"
+# Post immediately
+client.post_now(
+    text="Live now!",
+    service="twitter"
 )
-```
 
-### List Scheduled Posts
-```python
-pending = client.list_pending()
-print(f"You have {len(pending)} posts in queue")
-for post in pending:
-    print(f"  {post['due_at']}: {post['text'][:50]}...")
-```
+# Schedule for specific time
+from datetime import datetime, timedelta
 
-### Check Queue Space
-```python
-if client.has_queue_space():
-    # Add another post to maintain 9-10 posts in queue
-    client.create_update(text="Scheduled post", ...)
-else:
-    print("Queue full - wait for a post to go out")
-```
-
-### Update Scheduled Post
-```python
-client.update_update(
-    update_id="123456789",
-    text="Updated text for the post"
+due_at = (datetime.now() + timedelta(days=1)).isoformat()
+client.schedule_post(
+    text="Tomorrow's post",
+    due_at=due_at,
+    service="twitter"
 )
 ```
 
-### Delete from Queue
+### List and Read Posts
 ```python
-client.delete_update("123456789")
+# Get all posts
+posts = client.get_posts(org_id, limit=10)
+for edge in posts['edges']:
+    post = edge['node']
+    print(f"[{post['status']}] {post['text'][:50]}")
+
+# Get specific post
+details = client.get_post(POST_ID)
+print(f"Text: {details['text']}")
 ```
+
+## API Methods
+
+### Account
+- `get_account()` - Get account info with organizations
+
+### Organizations
+- `get_organizations()` - List user's organizations
+- `get_default_organization_id()` - Get first org (convenience)
+
+### Channels
+- `get_channels(organization_id)` - List connected channels
+- `get_channel(channel_id)` - Get channel details
+- `get_first_channel_id(organization_id, service)` - Get channel by service
+
+### Posts (CRUD)
+- `create_post(channel_id, text, mode, ...)` - Create new post
+  - `mode`: `addToQueue`, `shareNow`, `customScheduled`, `shareNext`, `recommendedTime`
+  - `scheduling_type`: `automatic` or `notification`
+- `get_post(post_id)` - Get post details
+- `get_posts(organization_id, limit)` - List posts
+
+### Helper Methods
+- `post_now(text, service)` - Post immediately
+- `add_to_queue(text, service)` - Add to end of queue
+- `schedule_post(text, due_at, service)` - Schedule for specific time
 
 ## CLI Usage
 
 ```bash
-# List connected accounts
-python scripts/buffer_client.py list-profiles
+# List connected channels
+python scripts/buffer_client.py channels
 
-# Schedule a text post
-python scripts/buffer_client.py create-update \
+# Create a post
+python scripts/buffer_client.py post \
   --text "Hello from Wembassy!" \
-  --profiles "profile-id-1,profile-id-2"
+  --services twitter
 
-# List scheduled posts
-python scripts/buffer_client.py list-pending
-
-# Check queue space
-python scripts/buffer_client.py queue-status
-
-# Delete a scheduled post
-python scripts/buffer_client.py delete-update --id 123456789
+# List recent posts
+python scripts/buffer_client.py posts --limit 5
 ```
 
-## Integration with Existing LinkedIn Scheduler
+## Integration Tips
 
-**Strategy: Use Buffer queue as 10-slot "staging area"**
-
+**Keep queue full (9-10 posts):**
 ```python
-# Daily check (via heartbeat)
-if buffer_client.has_queue_space():
-    # Pull next post from our internal queue
-    next_post = linkedin_scheduler.get_next_post()
-    
-    # Add to Buffer (publishes to LinkedIn + Twitter/X)
-    buffer_client.create_update(
-        text=next_post['text'],
-        profile_ids=['twitter_profile_id', 'linkedin_profile_id'],
-        scheduled_at=next_post['publish_time']
-    )
+# Check if we need more posts
+org_id = client.get_default_organization_id()
+posts = client.get_posts(org_id, limit=10)
+if len(posts['edges']) < 10:
+    # Add new post from content calendar
+    client.add_to_queue(text="Next post...")
 ```
 
-## Multi-Platform Posting Strategy
+## Connected Accounts (Wembassy)
 
-| Platform | Strategy |
-|----------|----------|
-| **LinkedIn** | Long-form content, industry insights |
-| **Twitter/X** | Shorter updates, quick tips |
-| **Facebook** | Community engagement |
-| **Instagram** | Visual content, behind-scenes |
-
-**Example: Blog announcement**
-```python
-text_linkedin = """New blog post: The Wembassy Method for Automation
-
-We break down our 4-step process for implementing business automation...
-
-Read more: https://wembassy.com/blog/the-wembassy-method"""
-
-text_twitter = "We just published our automation methodology 🚀 Check it out: https://wembassy.com/blog/the-wembassy-method"
-
-# Schedule separately for platform optimization
-buffer_client.create_update(text=text_linkedin, profile_ids=[linkedin_id])
-buffer_client.create_update(text=text_twitter, profile_ids=[twitter_id])
-```
+| Service | Account | Channel ID |
+|---------|---------|------------|
+| Twitter | @TeamWembassy | [TWITTER_CHANNEL_ID] |
+| Facebook | Wembassy - Drupal, Wordpress... | [ID from list] |
+| Google Business | Wembassy LLC | [ID from list] |
 
 ## Requirements
 
 - Python 3.7+
-- `requests` library
-
-## API Reference
-
-**Buffer API v1**
-- Base URL: `https://api.bufferapp.com/1`
-- Auth: OAuth 2.0 Bearer token in header
-- Rate limits: 60 requests/minute (buffered)
+- `requests`
+- `python-dotenv`
 
 ## Troubleshooting
 
-**400 "Unsupported Content-Type"**:
-- API endpoint changed - try `api.buffer.com/4/` or `publish.buffer.com/1/`
-- Token format may have changed - regenerate at buffer.com/developers
+**400 Bad Request**: Check query syntax - use GraphQL introspection
+**401 Unauthorized**: Token expired - regenerate
+**No channels found**: Check organization ID
 
-**401 Unauthorized**:
-- Access token expired - regenerate at buffer.com/developers
-- Token may be for different API version
+## API Reference
 
-**403 Forbidden**:
-- Free tier limit reached (10 scheduled posts)
-- Connected account limit reached (3 accounts)
-
-**500 Server Error**:
-- Buffer API may be temporarily down
-- Try again in a few minutes
-
-**Profile not found**:
-- Check profile ID with `list_profiles()`
-- Ensure account is connected in Buffer dashboard
-
-**Image upload failed**:
-- Use direct image URLs (Buffer fetches from URL)
-- Max image size: 8MB (free tier)
-
-## Important Notes
-
-- Posts must be scheduled **at least 10 minutes** in the future
-- Free tier: 3 social accounts, 10 scheduled posts
-- Video posting requires paid Buffer plan
-- Instagram requires mobile confirmation for some posts
+**Buffer GraphQL v2**
+- Base URL: `https://api.buffer.com/graphql`
+- Auth: Bearer token
+- Docs: https://developers.buffer.com/reference.html
 
 ## License
 
-Internal use for Wembassy social media operations.
+Internal use for Wembassy operations.
