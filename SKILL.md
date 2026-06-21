@@ -6,11 +6,13 @@ Cross-platform social media publishing via Buffer GraphQL API v2.
 
 ## Connected Accounts (Wembassy)
 
-| Service | Account | Channel ID |
-|---------|---------|------------|
-| **Twitter/X** | @TeamWembassy | `[TWITTER_CHANNEL_ID]` |
-| **Facebook** | Wembassy - Drupal, Wordpress, Website Development | `[FACEBOOK_CHANNEL_ID]` |
-| **Google Business** | Wembassy LLC | `[GOOGLE_CHANNEL_ID]` |
+| Service | Account | Status |
+|---------|---------|--------|
+| **Twitter/X** | @TeamWembassy | ✅ Connected |
+| **Facebook** | Wembassy - Drupal, Wordpress, Website Development | ✅ Connected |
+| **Google Business** | Wembassy LLC | ✅ Connected |
+
+*Note: Channel IDs are retrieved dynamically via `get_channels()`. See usage examples below.*
 
 ## Setup
 
